@@ -32,9 +32,13 @@ spawn_link(Node, Module, Function, Args) -> pid()
 > Returns the process identifier (pid) of a new process started by the application of Module:Function to Args on Node. A link is created between the calling process and the new process, atomically. If Node does not exist, a useless pid is returned and an exit signal with reason noconnection is sent to the calling process. Otherwise works like spawn/3.
 
 ### :erlang.spawn干了啥
+
 **此节非基于erlang源码，而是纯猜:)**
+
 * 编译代码
+
 用[Code.compile_string]编译匿名函数。实际spawn肯定不会用字符串去编译(用宏展开成ast?)。此处只是用于说明编译过程。
+
 ```Elixir
 src="""
 defmodule MyMod do
@@ -49,16 +53,22 @@ defmodule MyMod do
 
 * 加载字节码
 
-因为要在远程执行，那必然要加载到远程节点的。 erlang vm上有一个叫[code server]的带状态的服务,管理所有代码的加载。
+因为要在远程执行，那必然要加载到远程节点的。 OTP不会帮你把依赖自动都加载到远程。erlang vm上有一个叫[code server]的带状态的服务,管理所有代码的加载。
 
 ```elixir
+Node.spawn :"foo@computre-name", fn -> MyMod.hi() end
+#报错，找不到MyMod
 Node.spawn :"foo@computer-name", fn -> :code.load_binary(mod, 'nofile', obj_code) end
 ```
 
 * 执行
+
 ```elixir
+#远程已经加载了MyMod依赖，此时可以执行成功。同样eval_string也可以成功
+Node.spawn :"foo@computre-name", fn -> MyMod.hi() end
 Node.spawn :"foo@computre-name", fn -> Code.eval_string("MyMod.hi()") end
 ```
+
 此时会在当前控制台打印`hi`。如果没有前面的`:code.load_binary`，`Code.eval_string`是不能执行成功的。
 
 并且此时如果在`foo`节点控制台直接运行`MyMod.hi()`，也是可以正常运行的。
@@ -66,6 +76,7 @@ Node.spawn :"foo@computre-name", fn -> Code.eval_string("MyMod.hi()") end
 ### 运行环境
 
 我们发现在远程运行的`IO.puts`其实会打印到本地控制台，那其他资源如何？ 我们来试试文件系统
+
 ```Elixir
 >File.mkdir("__tmp")
 >File.exists?("__tmp")
@@ -73,9 +84,11 @@ true
 >Node.spawn :"foo@computre-name", fn -> IO.puts(File.exists?("__tmp")) end
 false
 ```
-所以文件系统还是每个节点自己用自己的。
+
+所以文件系统还是每个节点自己用自己的。包括如果你要加载so(C语言实现的erlang模块),因为不能通过erlang字节码传递so，所以需要远程机器上有这个so文件，当然我们可以通过远程函数直接拷贝本机的so过去。
 
 ### [Elixir分布式官方第二个例子]
+
 ```elixir
 iex> task = Task.Supervisor.async {KV.RouterTasks, :"foo@computer-name"}, fn ->
 ...>   {:ok, node()}
