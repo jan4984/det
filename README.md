@@ -110,6 +110,10 @@ iex> Task.await(task)
 
 所以`Task.Supervisor`就是给远程过程加了更多的监控和重启等控制。
 
+### erlang.rpc
+
+这个模块挺牛逼的，可以同步、异步调用远程函数，还可指定好几个远程节点一起调用函数。http://erlang.org/doc/man/rpc.html
+
 
 [Elixir分布式官方第一个例子]: https://elixir-lang.org/getting-started/mix-otp/distributed-tasks-and-configuration.html
 [Elixir分布式官方第二个例子]: https://elixir-lang.org/getting-started/mix-otp/distributed-tasks-and-configuration.html#distributed-tasks

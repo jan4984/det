@@ -26,7 +26,7 @@ Child Specification是针对每个被监控的进程的：
 
 Supervisor进程如果被杀(Process.exit/2)，他所有被监视的子进程都会被杀。但是这套东西到分布式环境下会怎样？比如Supervisor进程所在的Node
 
-### 一个利用spawn自己衔接的例子
+### 一个主动spawn_link并接入Supervisor树的例子
 
 [cowboy]的启动函数：
 
@@ -128,15 +128,28 @@ to stop cowboy
 iex(super@computer-name)2>
 ```
 
-**问题** 直接杀掉super节点，foo节点的cowboy竟然没有退出！！！我猜那应该是因为我们没有在`#{node()}_cowboy_parent`中监控(Process.monitor/1) Superivor进程。
+**问题** 直接杀掉super节点，foo节点的cowboy竟然没有退出！！！
 
-不过TCP网络本身如果没有心跳，在很多环境下本身就不能检测是否活着，所以我们对于分布式系统的监控，我觉得有必要在代码里自己心跳（假设Supervisor实现没有心跳的话）。
+我猜那应该是因为我们没有在`#{node()}_cowboy_parent`中监控(Process.monitor/1) Superivor进程。所以如果我们`Process.exit(sup_id)`,节点有足够的时间可以给被监控的进程发送`:Exit`,但是如果是直接杀死VM，那就没有这个过程了，但是`Process.monitor`却可以很快检测到远程的Node消失了，这是为啥？
 
-### 为什么不太好
+没有搜到太多直接的信息，结合基础网络知识来看，这个[关于远程节点失效检测的回答]比较靠谱。就是你按ctrl+c，os其实会给这个进程(操作系统进程）的tcp链接全部发送RST给远端。那远端当然就知道这个节点挂了，对应的就是这个节点上的所有进程(erlang进程）全挂了。所以如果拔网线，其实`Process.monitor`也是一时半会儿检测不到的（还没实际试过）。
 
-上面的例子中，其实Supervisor并没有形成一棵树，因为`#{node}_cowboy_parent`这个进程，并不是一个Supervisor进程，而是自己通过Process.monitor来做了监控。
+所以拔网线的话会等到Node的[心跳]，而如果业务上对时间比较敏感又不想改全局的远程节点检测心跳间隔，应用层自己做心跳也是很简单的，就是两个send/receive ping/pong嘛。
+
+**问题** 如果不要自己spawn_link怎么种（Supervisor）树
+
+你可以先有一个Supervisor进程,然后用`Supervisor.start_child`启动一个进程并加入到现有的Supervisor进程。上面cowboy的例子就可以改成
+
+```elixir
+ {:ok, sup_id} = Supervisor.start_link(CowBoySupervisor, []) #没有任何Child
+ Supervisor.start_child(sup_id, %{id: "worker1", start: {CowBoySupervisor, :start_node, [1, :"foo@computer-name"]}})
+```
+
+但是这样远程就没了，都在本地呢，呵呵。如果要保留这种模式启动分布式，只能把Supervisor进程启动在远程（或者远程启动好注册好，又或者启动了以后通过什么方式把pid发给你），然后一样继续用拿到的远程sup_id调用`Supervisor.start_child`。
 
 [Supervisor Behaviour]: http://erlang.org/doc/design_principles/sup_princ.html
 [Child Specification]: http://erlang.org/doc/design_principles/sup_princ.html#id79540
 [how process know being requested to exit]: http://erlang.org/doc/man/erlang.html#process_flag-2
 [cowboy]: https://github.com/ninenines/cowboy
+[心跳]: http://erlang.org/doc/man/net_kernel.html#set_net_ticktime-1
+[关于远程节点失效检测的回答]: https://stackoverflow.com/questions/24061270/how-is-the-detection-of-terminated-nodes-in-erlang-working-how-is-net-ticktime
