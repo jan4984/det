@@ -4,7 +4,9 @@
 
 ### Process.monitor/exit
 
-OTP的
+如果进程自己允许，可以由`Process.exit(pid, :kill)`强制退出，这点比较奇怪，现在主流设计都是不允许杀线程的，因为你我们不清楚杀掉的时候数据处于什么状态，不过有这个机制也不一定要用。
+
+进程内执行后`Process.flag(:trap_exit, true)`后，可以将外部的退出请求转化为`{:EXIT, }`消息。`Process.monitor`可以监控其他进程的退出，转化为`{:DOWN, }`消息。
 
 ### Supervisor：监控其他进程（们）的进程
 
