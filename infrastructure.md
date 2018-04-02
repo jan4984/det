@@ -2,24 +2,28 @@
 
 ### 名字服务
 #### 命名空间类型
-* 主机名——对应一个主机。一个主机（应该）不能用多个主机名。
+* 主机名——对应一个主机。一个主机（应该）能用多个主机名，只要其他节点能根据主机名找到。
 * VM/Node名——主机上可以启动多个VM
 * VM内本地名字——`local`命名空间下，只在当前VM内可访问，通过`Process.register`注册
 * 全局名——`global`命名空间下的名字，所有VM可见
 * 自定义命名空间——自己定一个Module实现如何注册名字、查找名字、发送消息(send)
 
-所以只要你愿意（注册），OTP里你可以找到所有节点的所有进程，然后向他们发消息
+所以只要你愿意（注册），OTP里你可以找到所有节点的所有进程，然后向他们发消息。
 
-Elixir好像没有开放同一个Host下多个Node之间的名字访问：[Name Registration]，但OTP本身标准支持: [gen_server ServerRef]。
+Elixir好像没有开放同一个Host下多个Node之间的名字访问：[Name Registration]，但OTP本身标准是支持的: [gen_server ServerRef]。
 
 #### 名字服务程序 [epmd]
 这是一个独立运行的程序，随着本机第一个Node启动而启动，也可以单独启动。任何本机Node启动后都会向本机的epmd注册自己的名字，同时empd会对外监听4369[默认值]端口，允许远程Node查询本机的Node。
+
+这样你就可以通过主机名找到对方的empd然后进一步查询节点端口了，找到端口以后就可以像那个vm发消息了。
 
 **epmd 允许可以按照[epmd protocol]自己实现**。
 
 ### 序列化
 
 erlang没有自定义类型，所有数据类型就那么几个，可以通过`term_to_binary`和`binary_to_term`，然后加上一些压缩和传输头。[erl_ext_dist文档传送门]
+
+还有就是erlang本身的字节码也是一个binary，可以来回到处收发的。
 
 nif resource(C写的带状态的erlang term)应该是不能序列化的，所以不能把C暴露给erlang的term发出去用，但是发出去再收回来如果C里面对应的资源都还在的话，还是能接着用的。
 

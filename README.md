@@ -37,7 +37,7 @@ spawn_link(Node, Module, Function, Args) -> pid()
 
 * 编译代码
 
-用[Code.compile_string]编译匿名函数。实际spawn肯定不会用字符串去编译(用宏展开成ast?)。此处只是用于说明编译过程。
+这个是运行前的，其实不关spawn的事。假设用[Code.compile_string]举例编译匿名函数。
 
 ```Elixir
 src="""
@@ -49,15 +49,14 @@ defmodule MyMod do
 [{mod, obj_code}] = Code.compile_string(src)
 ```
 
-因为Elixir是编译成erlang的字节码，所以编译以后和erlang是一套东西了
+因为Elixir是编译成erlang的字节码，所以编译以后和erlang是一套东西了。
 
 * 加载字节码
 
 因为要在远程执行，那必然要加载到远程节点的。 OTP不会帮你把依赖自动都加载到远程。erlang vm上有一个叫[code server]的带状态的服务,管理所有代码的加载。
 
 ```elixir
-Node.spawn :"foo@computre-name", fn -> MyMod.hi() end
-#报错，找不到MyMod
+Node.spawn :"foo@computre-name", fn -> MyMod.hi() end #报错，找不到MyMod
 Node.spawn :"foo@computer-name", fn -> :code.load_binary(mod, 'nofile', obj_code) end
 ```
 
@@ -85,7 +84,7 @@ true
 false
 ```
 
-所以文件系统还是每个节点自己用自己的。包括如果你要加载so(C语言实现的erlang模块),因为不能通过erlang字节码传递so，所以需要远程机器上有这个so文件，当然我们可以通过远程函数直接拷贝本机的so过去。
+所以文件系统还是每个节点自己用自己的。包括如果你要加载nif的so(C语言实现的erlang模块),因为你编译erlang的时候nif是不会被转成字节码的，所以需要远程机器上有这个so文件，当然我们可以通过远程函数直接拷贝本机的so过去，只要知道远程节点的C环境。
 
 ### [Elixir分布式官方第二个例子]
 
@@ -98,7 +97,7 @@ iex> Task.await(task)
 {:ok, :"foo@computer-name"}
 ```
 
-[Task.Supervisor]是一个用于监视动态任务的`Supervisor`。如果不了解`Supervisor`，看文档会很晕。`supervision trees`是一颗监视树，一层层的`Supervisor`可以监视自己的儿孙。官方文档中说了一堆`Task.Supervisor`本身这个特殊类型的`Supervisor`需要被放在一颗树里。反正跟我们现在说的分布式没直接关系，不要晕即可。
+[Task.Supervisor]是一个用于监视动态任务的`Supervisor`。`supervision tree`是一颗监视树，一层层的`Supervisor`可以监视自己的儿孙。官方文档中说了一堆`Task.Supervisor`本身这个特殊类型的`Supervisor`需要被放在一颗树里。反正跟我们现在说的分布式没直接关系，不要晕即可。
 
 第一行中`{KV.RouterTasks, :"foo@computer-name"}`前者是之前注册（`{Task.Supervisor, name: KV.RouterTasks}`）到监视树中`Supervisor`的名字，所以其实这个`KV.RouterTasks`是个`Task.Supervisor`类型的进程。（我这里说进程的类型，就是指这个进程能`receive`处理哪些消息）
 
